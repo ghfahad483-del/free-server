@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Message Flow Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        input {
+            padding: 10px;
+            width: 60%;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            margin: 0 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .output {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            min-height: 100px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .message-item {
+            background: white;
+            padding: 10px;
+            margin: 5px 0;
+            border-left: 4px solid #007bff;
+            border-radius: 2px;
+        }
+        .timestamp {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Message Flow Test</h1>
+        <p><strong>Flow:</strong> Receiver → Writer → Storage</p>
+        
+        <div>
+            <input type="text" id="messageInput" placeholder="Enter a message...">
+            <button onclick="sendMessage()">Send Message</button>
+            <button onclick="clearStorage()">Clear Storage</button>
+        </div>
+        
+        <div id="status" class="status" style="display:none;"></div>
+        
+        <h2>Messages in Storage:</h2>
+        <div class="output" id="output">
+            <p style="color: #999;">No messages yet...</p>
+        </div>
+    </div>
+
+    <script>
+        // ========== API FUNCTIONS ==========
+        async function sendMessage() {
+            console.log('sendMessage clicked');
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            console.log('Message value:', message);
+            
+            if (!message) {
+                showStatus('Please enter a message', 'error');
+                return;
+            }
+            
+            try {
+                console.log('[CLIENT] Sending message to server:', message);
+                
+                const response = await fetch('/api/message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+                
+                const data = await response.json();
+                console.log('[CLIENT] Server response:', data);
+                
+                if (data.success) {
+                    input.value = '';
+                    showStatus('✓ Message saved to storage.json!');
+                    loadMessages();
+                } else {
+                    showStatus('Error: ' + data.message, 'error');
+                }
+            } catch (error) {
+                console.error('[CLIENT] Error sending message:', error);
+                showStatus('Error: ' + error.message, 'error');
+            }
+        }
+
+        async function loadMessages() {
+            console.log('[CLIENT] Loading messages from server...');
+            
+            try {
+                const response = await fetch('/api/messages');
+                const messages = await response.json();
+                
+                console.log('[CLIENT] Messages received:', messages);
+                updateDisplay(messages);
+            } catch (error) {
+                console.error('[CLIENT] Error loading messages:', error);
+                showStatus('Error loading messages: ' + error.message, 'error');
+            }
+        }
+
+        async function clearStorage() {
+            console.log('[CLIENT] Clearing storage...');
+            
+            try {
+                const response = await fetch('/api/clear', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                console.log('[CLIENT] Clear response:', data);
+                
+                if (data.success) {
+                    showStatus('✓ Storage cleared');
+                    loadMessages();
+                } else {
+                    showStatus('Error: ' + data.message, 'error');
+                }
+            } catch (error) {
+                console.error('[CLIENT] Error clearing storage:', error);
+                showStatus('Error: ' + error.message, 'error');
+            }
+        }
+
+        function updateDisplay(messages) {
+            console.log('[CLIENT] updateDisplay called with', messages.length, 'messages');
+            const output = document.getElementById('output');
+            
+            if (!messages || messages.length === 0) {
+                output.innerHTML = '<p style="color: #999;">No messages yet...</p>';
+            } else {
+                let html = '';
+                messages.forEach((msg, index) => {
+                    html += `<div class="message-item">
+                        <strong>#${msg.id || index + 1}</strong>: ${msg.message}
+                        <div class="timestamp">${new Date(msg.timestamp).toLocaleString()}</div>
+                    </div>`;
+                });
+                output.innerHTML = html;
+            }
+            
+            console.log('[CLIENT] Display updated');
+        }
+
+        function showStatus(message, type = 'success') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.style.display = 'block';
+            statusEl.style.background = type === 'error' ? '#f8d7da' : '#d4edda';
+            statusEl.style.color = type === 'error' ? '#721c24' : '#155724';
+            
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 3000);
+        }
+
+        // ========== INITIALIZATION ==========
+        console.log('[CLIENT] Page loaded');
+        
+        // Setup event listener
+        const input = document.getElementById('messageInput');
+        if (input) {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    console.log('[CLIENT] Enter key pressed');
+                    sendMessage();
+                }
+            });
+            console.log('[CLIENT] Enter key listener attached');
+        }
+        
+        // Load initial messages
+        loadMessages();
+        console.log('[CLIENT] Page ready!');
+    </script>
+</body>
+</html>
